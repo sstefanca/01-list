@@ -26,6 +26,7 @@ Tlist *init_list()
 void free_list(Tlist **l)
 {
     //TODO: destroy lock
+    flush_list(*l);
     free(*l);
     *l=NULL;
 }
@@ -64,7 +65,7 @@ int add_node(Tlist *l, Tprint print, int val)
 int delete_node(Tlist *l, int val)
 {
     Tnode *it, *pit = NULL, *aux;
-    int ret;
+    int ret = 0;
 
     if(l == NULL)
 	return 0;
@@ -86,11 +87,44 @@ int delete_node(Tlist *l, int val)
     {
 	if(it->val == val)
 	{
-	    
+	    pit->next = it->next;
+	    free_node(&it);
 	}
 	pit = it;
 	it = it->next;
     }
 
-    return 0;
+    return ret;
+}
+
+void print_list(Tlist *l)
+{
+    Tnode *it;
+
+    it = l->first;
+    while(it != NULL)
+    {
+	it->print(it->val);
+	it = it->next;
+    }
+}
+
+void sort_list(Tlist *l)
+{
+}
+
+void flush_list(Tlist *l)
+{
+    Tnode *it, *aux;
+
+    it = l->first;
+    l->first = NULL;
+    l->last = NULL;
+
+    while(it!=NULL)
+    {
+	aux = it;
+	it = it->next;
+	free_node(&aux);
+    }
 }

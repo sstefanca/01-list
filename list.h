@@ -3,7 +3,7 @@
 
 #include <pthread.h>
 
-typedef void (*Tprint) (void *);
+typedef void (*Tprint) (int);
 
 typedef struct node
 {
@@ -29,12 +29,12 @@ int add_node(Tlist *l, Tprint print, int val);
 int delete_node(Tlist *l, int val);
 
 // Afiseaza lista
-void print_list();
+void print_list(Tlist *l);
 
 // Sorteaza lista in ordine crescatoare
-void sort_list();
+void sort_list(Tlist *l);
 
 // Goleste lista
-void flush_list();
+void flush_list(Tlist *l);
 
 #endif

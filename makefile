@@ -1,3 +1,4 @@
+CC=gcc
 CFLAGS=-Wall -Werror -ggdb
 LDFLAGS=-pthread
 FILES=main list
@@ -7,7 +8,7 @@ OBJECTS=$(addsuffix .o , $(FILES))
 all: bin
 
 bin: $(OBJECTS)
-	gcc -o $@ $^ $(LDFLAGS)
+	gcc $(LDFLAGS) -o $@ $^
 
 clean:
 	rm -fv bin $(OBJECTS) *~
