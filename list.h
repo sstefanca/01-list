@@ -10,13 +10,17 @@ typedef struct node
     Tprint print;
     int val;
     struct node *next;
-    //TODO: node sync lock
+    //acest lock este redundant
+    // daca ar fi posibila promovarea de la read la write,
+    // as putea folosi acest lock pentru a permite accesul read
+    // la lista in timp ce fac operatii de write
+    pthread_rwlock_t lock;
 } Tnode;
 
 typedef struct list
 {
     Tnode *first, *last;
-    //TODO: list sync lock
+    pthread_rwlock_t lock;
 } Tlist;
 
 Tlist *init_list();

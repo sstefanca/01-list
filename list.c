@@ -1,32 +1,62 @@
 #include "list.h"
 #include <stdlib.h>
 #include <pthread.h>
+#include <stdio.h>
 
 static Tnode *init_node()
 {
     Tnode *ret = calloc(1, sizeof(*ret));
-    //TODO: init lock
+    int retval;
+    retval = pthread_rwlock_init(&(ret->lock), NULL);
+    if(retval!=0)
+    {
+	free(ret);
+	ret = 0;
+    }
     return ret;
 }
 
 static void free_node(Tnode **n)
 {
-    //TODO: destroy lock
+    int retval;
+    retval = pthread_rwlock_destroy(&((*n)->lock));
+    if(retval!=0)
+    {
+	//nu ar trebui sa intre aici
+	fprintf(stderr, "ERROR: Tried to destroy locked lock\n");
+	exit(1);
+    }
     free(*n);
     *n=NULL;
 }
 
 Tlist *init_list()
 {
+    int retval;
     Tlist *ret = calloc(1, sizeof(*ret));
-    //TODO: init lock
+    retval = pthread_rwlock_init(&(ret->lock), NULL);
+    if(retval!=0)
+    {
+	free(ret);
+	ret = 0;
+    }
     return ret;
 }
 
 void free_list(Tlist **l)
 {
-    //TODO: destroy lock
+    int retval;
+
     flush_list(*l);
+    
+    retval = pthread_rwlock_destroy(&((*l)->lock));
+    if(retval!=0)
+    {
+	//nu ar trebui sa intre aici
+	fprintf(stderr, "ERROR: Tried to destroy locked lock\n");
+	exit(1);
+    }
+    
     free(*l);
     *l=NULL;
 }
@@ -44,7 +74,8 @@ int add_node(Tlist *l, Tprint print, int val)
     node->val=val;
     node->print=print;
 
-    //TODO: list sync required
+    pthread_rwlock_wrlock(&node->lock);
+    pthread_rwlock_wrlock(&l->lock);
     if(l->first == NULL)
     {
 	l->first = node;
@@ -52,12 +83,14 @@ int add_node(Tlist *l, Tprint print, int val)
     }
     else
     {
-	//TODO: node sync required
+	pthread_rwlock_wrlock(&l->last->lock);
+	pthread_rwlock_t *lock = &l->last->lock;
 	l->last->next = node;
 	l->last = node;
-	//TODO: release node sync
+	pthread_rwlock_unlock(lock);
     }
-    //TODO: release list sync
+    pthread_rwlock_unlock(&node->lock);
+    pthread_rwlock_unlock(&l->lock);
     
     return 0;
 }
@@ -68,45 +101,105 @@ int delete_node(Tlist *l, int val)
     int ret = 0;
 
     if(l == NULL)
-	return 0;
+	return ret;
 
+    pthread_rwlock_wrlock(&l->lock);
+    if(l->first == NULL)
+    {
+	pthread_rwlock_unlock(&l->lock);
+	return ret;
+    }
+    
+    pthread_rwlock_wrlock(&l->first->lock);
     if(l->first->val == val)
     {
-	//TODO: lock list
-	//TODO: lock elem
 	aux = l->first;
+	//deja avem wrlock
+	//pthread_rwlock_wrlock(&l->lock);
+	//pthread_rwlock_wrlock(&aux->lock);
 	l->first = aux->next;
 	if(l->first == NULL)
 	    l->last = NULL;
 	ret = aux -> val;
+
+	/*
+	  // sunt necesare aceste doua linii? daca e ceva, asigura ca nu mai sunt rdlockuri
+	pthread_rwlock_unlock(&aux->lock);
+	pthread_rwlock_wrlock(&aux->lock);
+	*/
+
+	pthread_rwlock_unlock(&l->lock);
+	pthread_rwlock_unlock(&aux->lock);
+	free_node(&aux);
 	
-	//TODO: release lock list
+	return ret;
     }
-    it = l->first;
+
+    /*
+//Am decis ca aceasta secventa este redundanta
+    if(l->first->next == NULL)
+    {
+	pthread_rwlock_unlock(&l->first->lock);
+	pthread_rwlock_unlock(&l->lock);
+	return ret;
+    }
+    */
+    
+    it = l->first->next;
+    pit = l->first;
     while(it != NULL)
     {
+	pthread_rwlock_wrlock(&it->lock);
 	if(it->val == val)
 	{
 	    pit->next = it->next;
+	    if(l->last == it)
+		l->last = pit;
+	    pthread_rwlock_unlock(&pit->lock);
+
+	    ret = it->val;
+	    pthread_rwlock_unlock(&it->lock);
 	    free_node(&it);
+	    pthread_rwlock_unlock(&l->lock);
+	    return ret;
 	}
+	pthread_rwlock_unlock(&pit->lock);
 	pit = it;
 	it = it->next;
     }
 
+    pthread_rwlock_unlock(&pit->lock);
+    pthread_rwlock_unlock(&l->lock);
     return ret;
 }
 
 void print_list(Tlist *l)
 {
-    Tnode *it;
+    Tnode *it, *pit;
 
-    it = l->first;
+    printf("(");
+    pthread_rwlock_rdlock(&l->lock);
+
+    if(l->first != NULL)
+    {
+	pthread_rwlock_rdlock(&l->first->lock);
+	pit = l->first;
+	pit->print(pit->val);
+	printf(", ");
+    }
+    it = pit->next;
     while(it != NULL)
     {
+	pthread_rwlock_rdlock(&it->lock);
 	it->print(it->val);
+	pthread_rwlock_unlock(&pit->lock);
+	pit = it;
 	it = it->next;
+	printf(", ");
     }
+    printf(")\n");
+    pthread_rwlock_unlock(&pit->lock);
+    pthread_rwlock_unlock(&l->lock);
 }
 
 void sort_list(Tlist *l)
@@ -114,6 +207,9 @@ void sort_list(Tlist *l)
     Tnode *it, *ait;
 
     //TODO: write lock list and nodes
+    pthread_rwlock_wrlock(&l->lock);
+    for(it=l->first; it!=NULL; it=it->next)
+	pthread_rwlock_wrlock(&it->lock);
     
     for( it = l->first; it!=NULL; it=it->next)
 	for( ait = it->next; ait!=NULL; ait=ait->next)
@@ -132,20 +228,29 @@ void sort_list(Tlist *l)
 		it->val = auxi;
 	    }
 	}
+
+    //TODO: release locks
+    for(it=l->first; it!=NULL; it=it->next)
+	pthread_rwlock_unlock(&it->lock);
+    pthread_rwlock_unlock(&l->lock);
 }
 
 void flush_list(Tlist *l)
 {
     Tnode *it, *aux;
 
+    pthread_rwlock_wrlock(&l->lock);
     it = l->first;
     l->first = NULL;
     l->last = NULL;
-
+    pthread_rwlock_unlock(&l->lock);
+    
     while(it!=NULL)
     {
 	aux = it;
+	pthread_rwlock_wrlock(&aux->lock);
 	it = it->next;
+	pthread_rwlock_unlock(&aux->lock);
 	free_node(&aux);
     }
 }
