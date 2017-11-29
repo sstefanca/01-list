@@ -1,6 +1,6 @@
 CFLAGS=-Wall -Werror -ggdb
 LDFLAGS=-pthread
-FILES=main
+FILES=main list
 
 OBJECTS=$(addsuffix .o , $(FILES))
 
