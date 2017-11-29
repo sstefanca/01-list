@@ -111,6 +111,27 @@ void print_list(Tlist *l)
 
 void sort_list(Tlist *l)
 {
+    Tnode *it, *ait;
+
+    //TODO: write lock list and nodes
+    
+    for( it = l->first; it!=NULL; it=it->next)
+	for( ait = it->next; ait!=NULL; ait=ait->next)
+	{
+	    if(ait->val < it->val)
+	    {
+		Tprint auxp;
+		int auxi;
+
+		auxp = ait->print;
+		ait->print = it->print;
+		it->print = auxp;
+
+		auxi = ait->val;
+		ait->val = it->val;
+		it->val = auxi;
+	    }
+	}
 }
 
 void flush_list(Tlist *l)
